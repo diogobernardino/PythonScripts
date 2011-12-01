@@ -1,4 +1,5 @@
 KMLParser
+
 Extract name and coordinates of points of a KML file.
 As an output you can choose:
 
