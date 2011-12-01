@@ -7,5 +7,3 @@ As an output you can choose:
 * *JSON* file	
 * Simplified *KML/KMZ* file
 * *Terminal*
-
-[Screenshot](PythonScripts/KMLParser/ss.png)
