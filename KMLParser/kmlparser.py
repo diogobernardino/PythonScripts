@@ -1,63 +1,71 @@
-#Autor Diogo Bernardino
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+#Author Diogo Bernardino
 #Credits: simpleKML Project http://code.google.com/p/simplekml/
 
 import json
 import codecs
-import sys
 from xml.etree import ElementTree as ET
-from simplekml import *
+from simplekml import Kml #imports should be specific to avoid polluting or replacing previously loaded names
 
-resultfilename = 'kmlinfo'
 
-args = sys.argv[1:]
-if len(args) != 1:
-    sys.exit('ERROR: Give me the filename argument!')
-filename = args[0]
+import argparse
 
-print 'Choose the output:\n 1 - Plain text file\n 2 - JSON file\n 3 - Simplified KML/KMZ file\n 4 - In terminal'
-output = input('')
 
-if output == 3:
-	kmlinstance = Kml()
-	folder = kmlinstance.newfolder()
-	folder.name = "My Places"
+class KMLParser:
+	OUTPUT_FORMATS = ['terminal','txt','json','kml','kmz']
 
-tree = ET.parse(filename)
+	RESULT_FILENAME = 'kmlinfo'
 
-#parse xmlns
-elem = tree.getroot()
-ns = elem.tag[:-3]
+	def __init__(self, filename):
+		tree = ET.parse(filename)
+		#Obtain xmlns
+		elem = tree.getroot()
+		ns = elem.tag[:-3]
 
-#parse placemark elements and append to json content
-content = ""
-for p in tree.iter(ns + 'Placemark'):
-	for pelem in p:
-		if pelem.tag == ns+'name':
-			name = pelem.text
-		elif pelem.tag == ns+'Point':
-			coord = pelem.find(ns+'coordinates').text.split(',',1)
-	if output == 1 or output == 4:
-		content = content + name + ' -> '+ ' '.join(coord) + '\n'
-	elif output == 2:
-		content = content +	json.dumps({'name': name, 'coordinates': {'latitude': coord[0], 'longitude':coord[1]}}) + ","	
-	elif output == 3:
-		folder.newpoint(name=name, coords=[(coord[0],coord[1])])
-if output == 2:
-	content = content[:-1] + "]"
+		#Internal geographical representation
+		self.content = []
 
-#write file
-if output == 1 or output == 2:
-	if output == 1:
-		f = codecs.open(resultfilename+".txt", 'w', "utf-8-sig")
-	elif output == 2:
-		f = codecs.open(resultfilename+".json", 'w', "utf-8-sig")
-	f.write(content + "\n")
-	f.close()
-elif output == 3:
-	format = input('KML or KMZ?\n 1 - KML\n 2 - KMZ\n')
-	if format == 1:
-		kmlinstance.save(resultfilename+".kml")
-	else:
-		kmlinstance.save(resultfilename+".kmz")
-elif output == 4:
-	print content
+		for p in tree.iter(ns + 'Placemark'):
+			for pelem in p:
+				if pelem.tag == ns+'name':
+					name = pelem.text
+				elif pelem.tag == ns+'Point':
+					coord = pelem.find(ns+'coordinates').text.split(',')
+			self.content.append( (name, coord[0], coord[1]) )#stores a list of 3-element tuples
+
+	def convert(self, output):
+		output_filename = '{}.{}'.format(KMLParser.RESULT_FILENAME, output)
+		if output in ['kml', 'kmz']: #check if value is in a list
+			kmlinstance = Kml()
+			folder = kmlinstance.newfolder()
+			folder.name = "My Places"
+			for name, lat, lon in self.content:#tuples can be decomposed in a for loop. This is the same as "for (x,y,z) in self.content" or "for t in self.content" and then using t[0] etc.
+				folder.newpoint(name=name, coords=[(lat,lon)])
+			kmlinstance.save( output_filename )
+		elif output in ['terminal', 'txt']:
+			newcontent = [ '%s\t->\t%.4f %.4f'%(name, float(lat),float(lon)) for name, lat, lon in self.content ] #list comprehensions rock!!
+			if output == 'txt':
+				f = open(output_filename, 'w')
+				f.write( '\n'.join(newcontent) )
+				f.close()
+			elif output is 'terminal':
+				print '\n'.join(newcontent)
+		elif output == 'json':
+			newcontent = [ {'name': name, 'coordinates': {'latitude':lat, 'longitude':lon} } for name, lat, lon in self.content ]
+			f = open(output_filename, 'w')
+			json.dump(newcontent, f, indent=2)
+			f.close()
+
+
+if __name__ == '__main__':
+	#argparsemodule takes care of argument parsing and is easy to modify in the future
+	arguments = argparse.ArgumentParser(description='Extract name and coordinates of points of a KML file')
+
+	arguments.add_argument( '-f','--file', metavar='<Filename>', required=True, help='KML File containing coordinates.' )
+	arguments.add_argument('-o','--output', default='terminal', choices=KMLParser.OUTPUT_FORMATS, help='Format of the output file.')
+
+	options = arguments.parse_args()
+
+	KMLParser(options.file).convert(options.output)
